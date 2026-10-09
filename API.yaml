@@ -1,0 +1,305 @@
+openapi: 3.1.0
+info:
+  title: Py-Managed-OpenVPN API
+  description: |
+    API for managing OpenVPN clients and checking application health and readiness.
+  version: 0.0.1.dev0
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8080
+    description: Dockerized local development server
+tags:
+  - name: Client
+    description: OpenVPN client management endpoints
+  - name: Actuator
+    description: Application health and readiness endpoints
+paths:
+  /py-managed-openvpn/client/{client_name}:
+    parameters:
+      - name: client_name
+        in: path
+        required: true
+        description: Name of the client.
+        schema:
+          type: string
+    get:
+      tags:
+        - Client
+      summary: Generate a client OpenVPN configuration
+      description: Returns the OpenVPN configuration file encoded as a single-line Base64 string.
+      responses:
+        '200':
+          description: Client configuration generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateClientOpenvpnFileResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Client
+      summary: Delete an OpenVPN client
+      description: Revokes the client certificate and deletes its certificate and private key.
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /py-managed-openvpn/client/connected:
+    get:
+      tags:
+        - Client
+      summary: Get connected OpenVPN clients
+      description: Returns the clients currently listed as connected in the OpenVPN server status file.
+      responses:
+        '200':
+          description: Connected clients retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObtainConnectedClientResponse'
+        '404':
+          $ref: '#/components/responses/RequestedFileNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /actuator/health:
+    get:
+      tags:
+        - Actuator
+      summary: Health check
+      description: Returns the health status of the application.
+      responses:
+        '200':
+          description: The application is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActuatorStatus'
+              example:
+                status: healthy
+  /actuator/readiness:
+    get:
+      tags:
+        - Actuator
+      summary: Readiness check
+      description: Returns the readiness status of the application.
+      responses:
+        '200':
+          description: The application is ready to serve requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActuatorStatus'
+              example:
+                status: ready
+  /py-managed-openvpn/client:
+    post:
+      tags:
+        - Client
+      summary: Create an OpenVPN client
+      description: Creates a client certificate and private key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '200':
+          description: Client created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseResponse'
+              example:
+                code: 0
+                message: Success
+        '409':
+          $ref: '#/components/responses/ClientAlreadyExists'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags:
+        - Client
+      summary: Renew an OpenVPN client certificate
+      description: Renews the certificate for an existing client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewClientRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /py-managed-openvpn/client/{client_name}/revoke:
+    delete:
+      tags:
+        - Client
+      summary: Revoke an OpenVPN client certificate
+      description: Revokes the certificate for an existing client.
+      parameters:
+        - name: client_name
+          in: path
+          required: true
+          description: Name of the client to revoke.
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    CreateClientRequest:
+      type: object
+      description: Request body for creating an OpenVPN client.
+      required:
+        - client_name
+        - client_country
+        - client_organization_unit
+      properties:
+        client_name:
+          type: string
+          description: Name of the client to create.
+          example: device_name_user
+        client_country:
+          type: string
+          description: Two-letter country code for the client certificate.
+          example: IT
+        client_organization_unit:
+          type: string
+          description: Organizational unit for the client certificate.
+          example: remote_monitoring
+    RenewClientRequest:
+      type: object
+      description: Request body for renewing an OpenVPN client certificate.
+      required:
+        - client_name
+      properties:
+        client_name:
+          type: string
+          description: Name of the client to renew.
+          example: device_name_user
+    BaseResponse:
+      type: object
+      description: Base structure returned by client management operations.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: Application response code.
+          example: 0
+        message:
+          type: string
+          description: Description of the operation result.
+          example: Success
+    GenerateClientOpenvpnFileResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          required:
+            - file_data
+          properties:
+            file_data:
+              type: string
+              format: byte
+              description: Single-line Base64-encoded OpenVPN configuration.
+    ObtainConnectedClientResponse:
+      example:
+        code: 0
+        connected_clients:
+          - common_name: device_name_user
+            last_ref: '2026-10-09 13:52:01'
+            real_address: '109.116.91.252:52861'
+            virtual_address: 172.27.224.2
+        message: Success
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          required:
+            - connected_clients
+          properties:
+            connected_clients:
+              type: array
+              description: Connected clients parsed from the OpenVPN status file.
+              items:
+                $ref: '#/components/schemas/ConnectedClient'
+    ConnectedClient:
+      type: object
+      description: Routing information for a connected OpenVPN client.
+      required:
+        - common_name
+        - last_ref
+        - real_address
+        - virtual_address
+      properties:
+        common_name:
+          type: string
+          description: Common name of the client certificate.
+          example: device_name_user
+        last_ref:
+          type: string
+          description: Last reference time reported by OpenVPN, in YYYY-MM-DD HH:mm:ss format without a timezone.
+          example: '2026-10-09 13:52:01'
+        real_address:
+          type: string
+          description: Public address and port of the client.
+          example: '109.116.91.252:52861'
+        virtual_address:
+          type: string
+          description: Virtual address assigned to the client in the VPN.
+          example: 172.27.224.2
+    ActuatorStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: healthy
+  responses:
+    Success:
+      description: Operation completed successfully.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BaseResponse'
+          example:
+            code: 0
+            message: Success
+    ClientAlreadyExists:
+      description: A client with the requested name already exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BaseResponse'
+          example:
+            code: 1001
+            message: Client already exists
+    RequestedFileNotFound:
+      description: The OpenVPN server status file was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BaseResponse'
+          example:
+            code: 1002
+            message: Requested file not found
+    InternalError:
+      description: The operation could not be completed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BaseResponse'
+          example:
+            code: 500
+            message: Internal Server Error

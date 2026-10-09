@@ -29,10 +29,10 @@ def renew_client():
             ResponseCodeEnums.get_by_code(code=response.code).http_status_code)
 
 
-@blueprint.route('/revoke', methods=['DELETE'])
-def revoke_client():
+@blueprint.route('/<client_name>/revoke', methods=['DELETE'])
+def revoke_client(client_name):
     log.info("[INCOMING REQUEST] - Revoke client")
-    request_data = RevokeClientRequest(**request.get_json())
+    request_data = RevokeClientRequest(client_name=client_name)
     response = client_service.revoke_client(request_data=request_data)
     return (jsonify(response.model_dump()),
             ResponseCodeEnums.get_by_code(code=response.code).http_status_code)
@@ -46,10 +46,10 @@ def download_client(client_name):
             ResponseCodeEnums.get_by_code(code=response.code).http_status_code)
 
 
-@blueprint.route('', methods=['DELETE'])
-def delete_client():
+@blueprint.route('/<client_name>', methods=['DELETE'])
+def delete_client(client_name):
     log.info("[INCOMING REQUEST] - Delete client")
-    request_data = DeleteClientRequest(**request.get_json())
+    request_data = DeleteClientRequest(client_name=client_name)
     response = client_service.delete_client(request_data=request_data)
     return (jsonify(response.model_dump()),
             ResponseCodeEnums.get_by_code(code=response.code).http_status_code)
