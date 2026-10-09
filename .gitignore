@@ -1,0 +1,7 @@
+/.idea/
+/uploads/
+/target/
+/venv/
+rclone.conf
+**.iml
+.env

@@ -1,0 +1,59 @@
+services:
+  py-managed-openvpn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: py-managed-openvpn
+        SERVICE_VERSION: 0.0.1.dev0
+    container_name: py-managed-openvpn
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - protocol: tcp
+        published: 8080
+        target: 8080
+    volumes:
+      - openvpn-data:/opt/py-managed-openvpn/target
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8080), timeout=2).close()" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  openvpn:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM ubuntu:22.04
+        RUN apt update
+        RUN DEBIAN_FRONTEND=noninteractive apt install -y openvpn iptables
+    container_name: openvpn
+    restart: always
+    depends_on:
+      py-managed-openvpn:
+        condition: service_healthy
+    env_file:
+      - .env
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - openvpn-data:/etc/openvpn-custom
+      - ./entrypoint.bash:/entrypoint.bash
+    ports:
+      - protocol: udp
+        published: 1194
+        target: 1194
+    entrypoint: [ "/entrypoint.bash" ]
+    healthcheck:
+      test: [ "CMD", "pgrep", "-x", "openvpn" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  openvpn-data:
