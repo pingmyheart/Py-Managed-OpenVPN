@@ -57,6 +57,24 @@ def secure_create_file(file_path: str, data: str) -> bool:
     return False
 
 
+def assign_permission_to_directory(directory_path: str, mode) -> bool:
+    """
+    Assign the specified permission mode to a directory at the given path.
+    :param directory: The path to the directory.
+    :param mode: The permission mode to assign.
+    :return: True if the permission was successfully assigned, False otherwise.
+    """
+    import os
+
+    if check_if_directory_exists(directory_path):
+        try:
+            os.chmod(directory_path, mode)
+            return True
+        except OSError:
+            return False
+    return False
+
+
 def assign_permission_to_file(file_path: str, mode) -> bool:
     """
     Assign the specified permission mode to a file at the given path.

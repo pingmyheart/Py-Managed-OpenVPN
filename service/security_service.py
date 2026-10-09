@@ -10,6 +10,8 @@ def create_crl() -> None:
 -config {env.openvpn_pki_path}openssl.cnf \
 -gencrl \
 -out {env.certificate_revocation_list_path}ca.crl""")
+    path_util.assign_permission_to_directory(directory_path=env.certificate_revocation_list_path, mode=0o755)
+    path_util.assign_permission_to_file(file_path=env.certificate_revocation_list_path + "ca.crl", mode=0o644)
 
 
 def create_tls_crypt() -> None:
