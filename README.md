@@ -198,7 +198,11 @@ Solo il traffico verso le **reti elencate** passa dalla VPN (in genere reti priv
 
 ## API REST
 
-URL di base: `http://<host>:8080`. Le richieste valide usano JSON e gli esiti applicativi descritti sotto sono JSON.
+URL di base: `http://<host>:8080`. Creazione e rinnovo richiedono un body JSON; download, elenco connessioni, revoca ed
+eliminazione non richiedono un body. Gli esiti applicativi descritti sotto sono JSON.
+
+La definizione OpenAPI 3.1 è disponibile in [`API.yaml`](API.yaml), consultabile con un visualizzatore compatibile come
+Swagger UI.
 
 Quando il controller completa la richiesta, le risposte applicative degli endpoint client contengono `code` e `message`; download e lista connessioni aggiungono campi specifici:
 
@@ -217,18 +221,20 @@ Quando il controller completa la richiesta, le risposte applicative degli endpoi
 
 ### Endpoint client
 
-| Metodo | Percorso | Corpo | Descrizione |
-|---|---|---|---|
-| `POST` | `/py-managed-openvpn/client` | `{"client_country":"IT","client_organization_unit":"HR","client_name":"mario"}` | Crea chiave privata, richiesta e certificato firmato dalla CA. |
-| `PATCH` | `/py-managed-openvpn/client` | `{"client_name":"mario"}` | Rinnova il certificato del client riutilizzando la chiave privata esistente. Se il certificato precedente non è scaduto, ne richiede la revoca, rigenera la CRL e segnala il riavvio; poi emette un certificato nuovo. Se è già scaduto, salta revoca, CRL e riavvio. |
-| `DELETE` | `/py-managed-openvpn/client/revoke` | `{"client_name":"mario"}` | Se chiave e certificato esistono e il certificato non è scaduto, ne richiede la revoca, rigenera la CRL e chiede il riavvio di OpenVPN. Se è scaduto restituisce successo senza aggiornare CRL o marker; se mancano chiave o certificato restituisce `500`. Mantiene i file su disco. |
-| `DELETE` | `/py-managed-openvpn/client` | `{"client_name":"mario"}` | Richiama la revoca senza verificarne il risultato e rimuove la chiave privata e il certificato del client. Non elimina la CSR, la cronologia PKI o i certificati archiviati in `newcerts`. |
-| `GET` | `/py-managed-openvpn/client/<client_name>` | – | Restituisce il profilo `.ovpn` codificato in Base64. |
-| `GET` | `/py-managed-openvpn/client/connected` | – | Legge la sezione `ROUTING TABLE` del file di stato e restituisce `connected_clients`. |
+| Metodo   | Percorso                                          | Corpo                                                                                      | Descrizione                                                                                                                                                                                                                                                                           |
+|----------|---------------------------------------------------|--------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `GET`    | `/py-managed-openvpn/client/{client_name}`        | –                                                                                          | Restituisce il profilo `.ovpn` codificato in Base64.                                                                                                                                                                                                                                  |
+| `GET`    | `/py-managed-openvpn/client/connected`            | –                                                                                          | Legge la sezione `ROUTING TABLE` del file di stato e restituisce `connected_clients`.                                                                                                                                                                                                 |
+| `POST`   | `/py-managed-openvpn/client`                      | `{"client_country":"IT","client_organization_unit":"HR","client_name":"device_name_user"}` | Crea chiave privata, richiesta e certificato firmato dalla CA.                                                                                                                                                                                                                        |
+| `PATCH`  | `/py-managed-openvpn/client`                      | `{"client_name":"device_name_user"}`                                                       | Rinnova il certificato del client riutilizzando la chiave privata esistente. Se il certificato precedente non è scaduto, ne richiede la revoca, rigenera la CRL e segnala il riavvio; poi emette un certificato nuovo. Se è già scaduto, salta revoca, CRL e riavvio.                 |
+| `DELETE` | `/py-managed-openvpn/client/{client_name}`        | –                                                                                          | Richiama la revoca senza verificarne il risultato e rimuove la chiave privata e il certificato del client. Non elimina la CSR, la cronologia PKI o i certificati archiviati in `newcerts`.                                                                                            |
+| `DELETE` | `/py-managed-openvpn/client/{client_name}/revoke` | –                                                                                          | Se chiave e certificato esistono e il certificato non è scaduto, ne richiede la revoca, rigenera la CRL e chiede il riavvio di OpenVPN. Se è scaduto restituisce successo senza aggiornare CRL o marker; se mancano chiave o certificato restituisce `500`. Mantiene i file su disco. |
+
+`{client_name}` è un parametro del percorso: sostituiscilo con il nome del client, ad esempio `device_name_user`.
 
 I codici della tabella sono quelli restituiti esplicitamente dai servizi: per esempio, il download di un client senza chiave o certificato restituisce `500`, non `404`; `1002` è usato quando manca il file di stato. Le richieste non valide non hanno un gestore applicativo JSON comune: JSON malformato o content type non supportato produce l'errore HTTP standard di Flask, mentre campi obbligatori mancanti/non validi nei DTO possono causare un errore HTTP 500 non nel formato `code`/`message`.
 
-La risposta di `GET` aggiunge il campo `file_data`:
+La risposta di `GET /py-managed-openvpn/client/{client_name}` aggiunge il campo `file_data`:
 
 ```json
 {
@@ -253,7 +259,7 @@ Esempio di risposta:
   "connected_clients": [
     {
       "virtual_address": "172.16.0.2",
-      "common_name": "mario",
+      "common_name": "device_name_user",
       "real_address": "203.0.113.10:45000",
       "last_ref": "2026-10-08 12:00:00"
     }
@@ -262,6 +268,15 @@ Esempio di risposta:
 ```
 
 Le chiavi derivano dalle intestazioni CSV convertite in minuscolo con `_` al posto degli spazi. I valori restano stringhe. La risposta non include byte trasferiti o data di connessione, che appartengono alla sezione `CLIENT LIST`.
+
+Lo schema OpenAPI `ConnectedClient` descrive i quattro campi obbligatori di ogni elemento di `connected_clients`:
+
+| Campo             | Descrizione                                                                                    |
+|-------------------|------------------------------------------------------------------------------------------------|
+| `common_name`     | Common name del certificato del client.                                                        |
+| `last_ref`        | Ultimo riferimento riportato da OpenVPN, nel formato `YYYY-MM-DD HH:mm:ss`, senza fuso orario. |
+| `real_address`    | Indirizzo pubblico e porta del client.                                                         |
+| `virtual_address` | Indirizzo virtuale assegnato al client nella VPN.                                              |
 
 Il risultato è uno snapshot, non una lettura in tempo reale: la direttiva `status` non specifica un intervallo e OpenVPN aggiorna normalmente il file ogni 60 secondi. Se il file non esiste, l'endpoint restituisce HTTP 404 con `code: 1002`; un file incompleto o di formato diverso può invece provocare un errore interno.
 
@@ -291,25 +306,26 @@ Ogni risposta include l'header `Request-ID` con il trace ID OpenTelemetry (`no-t
 ```bash
 curl -X POST http://localhost:8080/py-managed-openvpn/client \
   -H 'Content-Type: application/json' \
-  -d '{"client_country":"IT","client_organization_unit":"HR","client_name":"mario"}'
+  -d '{"client_country":"IT","client_organization_unit":"HR","client_name":"device_name_user"}'
 ```
 
 **2. Scarica il profilo e salvalo come file `.ovpn`**
 
 ```bash
-curl -fsS http://localhost:8080/py-managed-openvpn/client/mario \
+curl -fsS http://localhost:8080/py-managed-openvpn/client/device_name_user \
   | jq -r '.file_data' \
-  | base64 -d > mario.ovpn
+  | base64 -d > device_name_user.ovpn
 ```
 
-`jq -r` elimina le virgolette; `base64 -d` decodifica il contenuto. Importa `mario.ovpn` in un qualsiasi client OpenVPN.
+`jq -r` elimina le virgolette; `base64 -d` decodifica il contenuto. Importa `device_name_user.ovpn` in un qualsiasi
+client OpenVPN.
 
 **3. Rinnova il client**
 
 ```bash
 curl -X PATCH http://localhost:8080/py-managed-openvpn/client \
   -H 'Content-Type: application/json' \
-  -d '{"client_name":"mario"}'
+  -d '{"client_name":"device_name_user"}'
 ```
 
 Dopo il rinnovo scarica di nuovo il profilo, che contiene il certificato aggiornato. La chiave privata del client resta invariata; il certificato precedente viene revocato se non era già scaduto.
@@ -317,9 +333,7 @@ Dopo il rinnovo scarica di nuovo il profilo, che contiene il certificato aggiorn
 **4. Revoca il client**
 
 ```bash
-curl -X DELETE http://localhost:8080/py-managed-openvpn/client/revoke \
-  -H 'Content-Type: application/json' \
-  -d '{"client_name":"mario"}'
+curl -X DELETE http://localhost:8080/py-managed-openvpn/client/device_name_user/revoke
 ```
 
 Quando la revoca viene eseguita, aggiorna la CRL e richiede un riavvio che interrompe **tutte** le connessioni OpenVPN, non solo quella del client revocato. Se il certificato è già scaduto, il metodo restituisce successo senza aggiornare la CRL o richiedere il riavvio.
@@ -327,9 +341,7 @@ Quando la revoca viene eseguita, aggiorna la CRL e richiede un riavvio che inter
 **5. Elimina i file del client**
 
 ```bash
-curl -X DELETE http://localhost:8080/py-managed-openvpn/client \
-  -H 'Content-Type: application/json' \
-  -d '{"client_name":"mario"}'
+curl -X DELETE http://localhost:8080/py-managed-openvpn/client/device_name_user
 ```
 
 Questa operazione è distinta dalla sola revoca: elimina chiave privata e certificato dopo aver richiamato la revoca. Se entrambi sono già assenti restituisce successo. Le registrazioni della CA restano nel database PKI.
@@ -380,6 +392,7 @@ L'archivio contiene chiavi private: custodiscilo cifrato e non inserirlo nel con
 ```text
 .
 ├── app.py                    # applicazione Flask e inizializzazione all'avvio
+├── API.yaml                  # definizione OpenAPI delle API REST
 ├── entrypoint.bash           # script di avvio del container OpenVPN
 ├── Dockerfile                # immagine del servizio Python
 ├── docker-compose.yaml       # servizi, volume e healthcheck
