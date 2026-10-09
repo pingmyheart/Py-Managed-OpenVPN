@@ -108,12 +108,16 @@ Tutta la configurazione avviene tramite **variabili d'ambiente** (file `.env`, c
 
 ### Server OpenVPN
 
-| Variabile | Default | Descrizione |
-|---|---|---|
-| `OPENVPN_SERVER_HOSTNAME` | *(nessuno)* | Hostname o IP pubblico scritto nella direttiva `remote` dei profili client. Va impostata per ottenere profili utilizzabili; il codice non ne verifica la presenza all'avvio. |
-| `OPENVPN_SERVER_NETWORK_ADDRESS` | `10.77.0.0` | Indirizzo della rete VPN assegnata ai client. |
-| `OPENVPN_SERVER_NETWORK_MASK` | `24` | Lunghezza del prefisso della rete VPN (notazione CIDR). |
-| `OPENVPN_SERVER_NETWORK_MODE` | `passthrough` | `passthrough` oppure `resource_only` (vedi [Modalità](#modalità-di-funzionamento)). Il valore non distingue maiuscole/minuscole; un valore diverso ricade silenziosamente su `passthrough`. |
+| Variabile                        | Default                   | Descrizione                                                                                                                                                                                                                           |
+|----------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `OPENVPN_SERVER_HOSTNAME`        | *(nessuno)*               | Hostname o IP pubblico scritto nella direttiva `remote` dei profili client. Va impostata per ottenere profili utilizzabili; il codice non ne verifica la presenza all'avvio.                                                          |
+| `OPENVPN_SERVER_NETWORK_ADDRESS` | `10.77.0.0`               | Indirizzo della rete VPN assegnata ai client.                                                                                                                                                                                         |
+| `OPENVPN_SERVER_NETWORK_MASK`    | `24`                      | Lunghezza del prefisso della rete VPN (notazione CIDR).                                                                                                                                                                               |
+| `OPENVPN_SERVER_NETWORK_MODE`    | `full_tunnel` (effettivo) | `full_tunnel` oppure `resource_only` (vedi [Modalità](#modalità-di-funzionamento)). Il valore non distingue maiuscole/minuscole; un valore non riconosciuto ricade silenziosamente su `full_tunnel` (`OpenVPNModeEnums.FULL_TUNNEL`). |
+
+> Il valore di fallback passato attualmente a `os.getenv` nel codice è ancora `PASSTHROUGH`: non essendo più
+> riconosciuto dall'enum, viene convertito in `FULL_TUNNEL`. Per una configurazione esplicita usa
+> `OPENVPN_SERVER_NETWORK_MODE=full_tunnel`.
 
 ### Route per `resource_only`
 
@@ -136,7 +140,7 @@ Per ogni rete privata raggiungibile tramite VPN definisci una coppia di variabil
 
 Comportamento se non ne definisci nessuno:
 
-- in **`passthrough`** vengono usati `8.8.8.8` e `8.8.4.4`;
+- in **`full_tunnel`** vengono usati `8.8.8.8` e `8.8.4.4`;
 - in **`resource_only`** **non viene inviato alcun DNS**, così i client continuano a usare il proprio DNS per il traffico non VPN.
 
 Se ti serve risolvere nomi interni in `resource_only`, indica un DNS **raggiungibile tramite le route della VPN**:
@@ -174,7 +178,7 @@ OPENVPN_SERVER_DNS_0_ADDRESS=192.168.1.1
 
 ## Modalità di funzionamento
 
-### `passthrough` (full tunnel)
+### `full_tunnel` (full tunnel)
 
 Il traffico Internet IPv4 del client passa dalla VPN; non viene configurato un full tunnel IPv6.
 
@@ -477,7 +481,9 @@ Il servizio Python non ha ancora generato la configurazione o il volume è vuoto
 Non viene inviato alcun DNS di default. Imposta `OPENVPN_SERVER_DNS_0_ADDRESS` con un DNS raggiungibile tramite la VPN.
 
 **I siti Internet non si aprono con la VPN attiva**
-In `resource_only` il traffico generale deve continuare a usare la rete del client. Controlla sovrapposizioni tra subnet, route predefinita del client e l'eventuale DNS personalizzato: inviare un DNS non configura automaticamente uno split DNS. Usa `passthrough` soltanto se vuoi spostare il traffico Internet IPv4 nella VPN.
+In `resource_only` il traffico generale deve continuare a usare la rete del client. Controlla sovrapposizioni tra
+subnet, route predefinita del client e l'eventuale DNS personalizzato: inviare un DNS non configura automaticamente uno
+split DNS. Usa `full_tunnel` soltanto se vuoi spostare il traffico Internet IPv4 nella VPN.
 
 **`Cannot uniquely identify the outgoing interface`**
 Il rilevamento dell'interfaccia di uscita non ha trovato una sola interfaccia per l'indirizzo sorgente. Controlla la rete del container (rotta verso Internet, nessun indirizzo duplicato).
