@@ -41,6 +41,7 @@ fi
 
 create_iptables_rules
 
+echo "Starting OpenVPN..."
 start_openvpn
 
 trap delete_iptables_rules SIGTERM
