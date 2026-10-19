@@ -1,3 +1,10 @@
+"""Coordinate persistent VPN setup and periodic PKI renewal.
+
+``need_to_restart`` records renewals during a refresh cycle. Shell exit codes and
+boolean filesystem helper results are not checked; certificate parsing and
+other uncaught errors propagate to the caller.
+"""
+
 from configuration.environment_configuration import private_keys_path, certificates_path, \
     certificate_revocation_list_path, certificate_sign_request_path, new_certificates_path, openvpn_pki_path, \
     openvpn_conf_path, openvpn_log_path, openvpn_rules_path
@@ -12,6 +19,11 @@ need_to_restart = False
 
 
 def initialize_path():
+    """Create missing PKI, configuration, log, and firewall directories.
+
+    Newly created leaf directories request mode 0700. Existing paths and their
+    permissions are left unchanged.
+    """
     for _, required_path in enumerate([private_keys_path,
                                        openvpn_conf_path,
                                        openvpn_log_path,
@@ -28,6 +40,11 @@ def initialize_path():
 
 
 def initialize_pki_files():
+    """Create missing CA database files without overwriting existing state.
+
+    Initializes an empty ``index.txt`` and seeds both ``serial`` and
+    ``crlnumber`` with ``1000``.
+    """
     log.info("Initializing OpenVPN PKI")
 
     path_util.secure_create_file(file_path=openvpn_pki_path + "index.txt",
@@ -42,10 +59,20 @@ def initialize_pki_files():
 
 
 def initialize_openssl_configuration():
+    """Rewrite ``openssl.cnf`` from the current environment's CA settings."""
     openssl_util.create_openssl_conf_file()
 
 
 def initialize_certification_authority():
+    """Create missing CA assets and renew certificates with under 30 days left.
+
+    Existing private keys are reused. Renewal sets ``need_to_restart`` but does
+    not itself write the restart signal file. Expiration comparisons use the
+    certificate timestamp helper's local-time conversion.
+
+    :raises OSError: If the CA certificate cannot be read.
+    :raises ValueError: If the CA certificate cannot be parsed.
+    """
     global need_to_restart
     # Generate or renew CA
     if not path_util.check_if_file_exists(private_keys_path + "ca.key"):
@@ -69,6 +96,14 @@ def initialize_certification_authority():
 
 
 def initialize_server():
+    """Create missing server assets and renew certificates with under 30 days left.
+
+    Reuses an existing server key and sets ``need_to_restart`` after renewal.
+    Requires initialized CA assets and the OpenSSL configuration.
+
+    :raises OSError: If the server certificate cannot be read.
+    :raises ValueError: If the server certificate cannot be parsed.
+    """
     global need_to_restart
     # Generate or renew server
     if not path_util.check_if_file_exists(private_keys_path + "server.key"):
@@ -94,6 +129,15 @@ def initialize_server():
 
 
 def initialize_crl():
+    """Create a missing CRL or renew one with under five days until next update.
+
+    Renewal sets ``need_to_restart`` without writing the restart signal file.
+    Requires initialized CA assets and the OpenSSL configuration.
+
+    :raises OSError: If the CRL cannot be read.
+    :raises ValueError: If the CRL cannot be parsed.
+    :raises AttributeError: If the CRL has no next-update date.
+    """
     global need_to_restart
     # Generate or renew crl
     if not path_util.check_if_file_exists(certificate_revocation_list_path + "ca.crl"):
@@ -113,6 +157,7 @@ def initialize_crl():
 
 
 def initialize_tls_key():
+    """Create the shared ``tls-crypt`` key only if ``ta.key`` is absent."""
     # Generate tls key
     if not path_util.check_if_file_exists(private_keys_path + "ta.key"):
         from service.security_service import create_tls_crypt
@@ -123,6 +168,11 @@ def initialize_tls_key():
 
 
 def initialize_openvpn_files():
+    """Rewrite the server configuration using the configured VPN routing mode.
+
+    :raises ValueError: If a configured prefix cannot be converted to a usable
+        integer for network-mask generation.
+    """
     # Generate openvpn configuration
     from service.openvpn_service import create_openvpn_configuration
     from configuration.environment_configuration import openvpn_server_network_mode
@@ -130,12 +180,18 @@ def initialize_openvpn_files():
 
 
 def initialize_need_to_restart_file():
+    """Rewrite the timestamp file used by the container to detect restart requests."""
     # Generate need to restart file
     from service.openvpn_service import create_need_to_restart_file
     create_need_to_restart_file()
 
 
 def initialize_iptables_rules():
+    """Rewrite both firewall rule scripts without applying them.
+
+    :raises RuntimeError: If the outgoing interface is not uniquely identifiable.
+    :raises OSError: If the route lookup fails.
+    """
     # Generate iptables rules file
     from service import iptables_service
     iptables_service.generate_create_rules_file()
@@ -143,6 +199,12 @@ def initialize_iptables_rules():
 
 
 def initialize():
+    """Initialize directories, PKI, server configuration, and firewall scripts.
+
+    Preserves existing PKI database files and private keys, renews expiring
+    assets, and rewrites generated configuration and restart signal files.
+    Parsing, route lookup, and other uncaught helper errors propagate.
+    """
     initialize_path()
     initialize_pki_files()
     initialize_openssl_configuration()
@@ -156,6 +218,12 @@ def initialize():
 
 
 def refresh():
+    """Refresh CA, server, and CRL assets and signal a restart after renewal.
+
+    Resets ``need_to_restart`` before checking assets and after successful
+    completion. Missing assets are created, but only renewals set the flag.
+    Uncaught errors propagate without completing the remaining refresh steps.
+    """
     global need_to_restart
     need_to_restart = False
     initialize_certification_authority()

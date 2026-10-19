@@ -1,6 +1,13 @@
+"""Generate the OpenSSL configuration for the shared VPN PKI."""
+
+
 def create_openssl_conf_file() -> None:
-    """
-    Create OpenSSL config file
+    """Write ``openssl.cnf`` using configured CA subject values and PKI paths.
+
+    Defines the CA database, 825-day certificate and 30-day CRL defaults,
+    subject policy, and CA, server, client, and CRL extension sections.
+    Requests mode 0600 through the filesystem helper; its boolean result is
+    not checked.
     """
     from configuration.environment_configuration import (certification_authority_country, \
                                                          certification_authority_organization,

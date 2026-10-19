@@ -1,3 +1,9 @@
+"""Configure, but do not start, the daily background PKI refresh scheduler.
+
+The scheduler uses UTC; the cron trigger is created without an explicit timezone
+and therefore uses the local timezone.
+"""
+
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler

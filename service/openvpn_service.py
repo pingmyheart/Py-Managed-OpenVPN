@@ -1,3 +1,5 @@
+"""Generate server configuration, signal restarts, and read VPN routing status."""
+
 import csv
 import re
 import time
@@ -13,6 +15,17 @@ from util import (network_util,
 
 
 def create_openvpn_configuration(mode: OpenVPNModeEnums = OpenVPNModeEnums.FULL_TUNNEL):
+    """Write the UDP/1194 server configuration to ``openvpn.conf``.
+
+    Includes PKI paths, TLS settings, configured DNS servers, and either a
+    default-gateway push or explicit resource routes. Paths in the generated
+    configuration are relative to the shared data directory. File creation
+    failures are not checked.
+
+    :param mode: Routing mode; defaults to full tunnel.
+    :raises ValueError: If a configured prefix length cannot be converted to an
+        integer or produces a negative bit shift.
+    """
     log.info(f"Generating openvpn configuration in {mode.mode} mode")
     config = f"""port 1194
 proto udp
@@ -65,9 +78,11 @@ explicit-exit-notify 1
 
 
 def create_need_to_restart_file():
-    """
-    This method obtain current timestamp and place it in a file using secure methods
-    :return: nothing, void method
+    """Write the current epoch milliseconds to the restart signal file.
+
+    The container entrypoint watches the modification time of
+    ``openvpn-conf/need_to_restart``. Rewriting it requests a restart; file
+    creation failures are not checked.
     """
     log.info("Creating need_to_restart file to signal that openvpn service needs to be restarted")
     current_timestamp = str(int(time.time() * 1000))
@@ -76,11 +91,15 @@ def create_need_to_restart_file():
 
 
 def obtain_connected_clients() -> BaseResponse:
-    """
-    This method read the server stats log file,
-    uses a custom written regex to extract the part of assigned virtual addressed,
-    parse the result as csv using existing csv package and return a custom dictionary with the connected clients information
-    :return: dictionary
+    """Parse routing entries from the OpenVPN CSV status log.
+
+    Extracts the section between ``ROUTING TABLE`` and ``GLOBAL STATS`` and
+    normalizes column names to lowercase with spaces replaced by underscores.
+
+    :return: ``ObtainConnectedClientResponse`` containing routing dictionaries,
+        or ``BaseResponse`` with ``REQUESTED_FILE_NOT_FOUND`` if the log is absent.
+    :raises OSError: If an existing status log cannot be read.
+    :raises AttributeError: If the log lacks the expected routing-table section.
     """
     if not path_util.check_if_file_exists(file_path=env.openvpn_log_path + "status-server.log"):
         return BaseResponse.from_code(ResponseCodeEnums.REQUESTED_FILE_NOT_FOUND)

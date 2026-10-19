@@ -1,3 +1,9 @@
+"""Create the instrumented Flask app and initialize the VPN on import.
+
+Importing this module verifies external tools, initializes persistent VPN files,
+registers HTTP routes, and starts the background PKI scheduler.
+"""
+
 from flask import Flask
 from opentelemetry import trace
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
@@ -10,6 +16,11 @@ from util import (initialization_util)
 
 
 def verify_tools():
+    """Check that the OpenSSL and OpenVPN version commands succeed.
+
+    :raises ToolNotInstalledException: If either tool is missing or its version
+        command exits with a nonzero status.
+    """
     from service import tool_service
     if not tool_service.check_openssl_is_installed():
         raise ToolNotInstalledException("OpenSSL")
@@ -30,6 +41,12 @@ RequestsInstrumentor().instrument()
 
 @app.after_request
 def add_trace_headers(response):
+    """Attach the active trace identifier to an outgoing Flask response.
+
+    :param response: Flask response to modify in place.
+    :return: The same response with a ``Request-ID`` header containing the trace
+        ID, or ``no-trace`` when no valid span is active.
+    """
     span = trace.get_current_span()
     ctx = span.get_span_context()
 

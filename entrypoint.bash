@@ -1,12 +1,16 @@
 #!/bin/bash
+# Run OpenVPN with generated firewall rules and watch the restart signal file.
+# Requires the shared configuration under /etc/openvpn-custom and NET_ADMIN.
 set -euo pipefail
 
 openvpn_pid=""
 
+# Start OpenVPN in the background and store its PID in openvpn_pid; no arguments.
 function start_openvpn(){
     openvpn --config openvpn-conf/openvpn.conf &
     openvpn_pid=$!
 }
+# Force-stop and reap the recorded child if running, then clear openvpn_pid.
 function stop_openvpn(){
     if [[ -n "$openvpn_pid" ]] && kill -0 "$openvpn_pid" 2>/dev/null; then
       kill -9 "$openvpn_pid"
@@ -16,16 +20,19 @@ function stop_openvpn(){
     fi
     openvpn_pid=""
 }
+# Stop the recorded OpenVPN child before starting its replacement; no arguments.
 function restart_openvpn(){
   echo "Restart requested. Restarting OpenVPN..."
     stop_openvpn
     start_openvpn
 }
+# Execute the generated creation script relative to the shared data directory.
 function create_iptables_rules(){
   echo "Creating iptables rules..."
   bash openvpn-rules/iptables.rules.create.bash
   echo "iptables rules created."
 }
+# Execute the generated deletion script, also used as the termination handler.
 function delete_iptables_rules(){
   echo "Deleting iptables rules..."
   bash openvpn-rules/iptables.rules.delete.bash

@@ -1,3 +1,5 @@
+"""Generate the OpenVPN server's private key and CA-signed certificate."""
+
 from configuration import environment_configuration as env
 from configuration.logging_configuration import logger as __log
 from util import path_util as __path_util
@@ -5,6 +7,10 @@ from util import shell_util as __shell_util
 
 
 def create_server_private_key() -> None:
+    """Generate ``server.key`` as a 3072-bit RSA key and request mode 0600.
+
+    Command exit codes and permission helper failures are not checked.
+    """
     __log.info("Generating server private key")
     __shell_util.run_command(f"""openssl genpkey \
 -algorithm RSA \
@@ -14,6 +20,12 @@ def create_server_private_key() -> None:
 
 
 def create_server_certificate() -> None:
+    """Create a server CSR and request an 825-day SHA-256 certificate.
+
+    Reuses ``server.key`` and the configured server subject. Requires an
+    initialized CA database and ``openssl.cnf`` with ``server_cert`` extensions.
+    Writes ``server.csr`` and ``server.crt`` without checking command exit codes.
+    """
     __shell_util.run_command(f"""openssl req -new \
 -key {env.private_keys_path}server.key \
 -subj '/C={env.server_country}/O={env.server_organization}/OU={env.server_organization_unit}/CN={env.server_common_name}' \

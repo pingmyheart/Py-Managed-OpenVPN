@@ -1,7 +1,13 @@
+"""Check external tool availability by executing their version commands."""
+
+
 def check_openvpn_is_installed():
     """
-    Check if OpenVPN is installed on the system using agnostic approach.
-    :return: True if OpenVPN is installed, False otherwise
+    Check whether the OpenVPN version command can run successfully.
+
+    :return: ``True`` if ``openvpn --version`` exits successfully; ``False`` if
+        the executable is missing or exits with a nonzero status.
+    :raises OSError: For process launch failures other than a missing executable.
     """
     import subprocess
 
@@ -14,8 +20,11 @@ def check_openvpn_is_installed():
 
 def check_openssl_is_installed():
     """
-    Check if OpenSSL is installed on the system using agnostic approach.
-    :return: True if OpenSSL is installed, False otherwise
+    Check whether the OpenSSL version command can run successfully.
+
+    :return: ``True`` if ``openssl version`` exits successfully; ``False`` if
+        the executable is missing or exits with a nonzero status.
+    :raises OSError: For process launch failures other than a missing executable.
     """
     import subprocess
 

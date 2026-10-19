@@ -1,3 +1,5 @@
+"""Declare package metadata and discover packages for setuptools."""
+
 import warnings
 
 from setuptools import setup, find_packages

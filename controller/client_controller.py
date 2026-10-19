@@ -1,3 +1,5 @@
+"""Map client lifecycle and profile HTTP endpoints to VPN services."""
+
 from flask import Blueprint, request, jsonify
 
 from configuration.logging_configuration import logger as log
@@ -13,6 +15,11 @@ blueprint = Blueprint('client', __name__, url_prefix='/py-managed-openvpn/client
 
 @blueprint.route('', methods=['POST'])
 def create_new_client():
+    """Create a client from the current request's JSON body.
+
+    :return: The serialized service response and its mapped HTTP status.
+    :raises pydantic.ValidationError: If the client creation fields are invalid.
+    """
     log.info("[INCOMING REQUEST] - Create new client")
     request_data = CreateClientRequest(**request.get_json())
     response = client_service.create_client(request_data=request_data)
@@ -22,6 +29,11 @@ def create_new_client():
 
 @blueprint.route('', methods=['PATCH'])
 def renew_client():
+    """Renew the client named in the current request's JSON body.
+
+    :return: The serialized service response and its mapped HTTP status.
+    :raises pydantic.ValidationError: If the renewal fields are invalid.
+    """
     log.info("[INCOMING REQUEST] - Renew client")
     request_data = RenewClientRequest(**request.get_json())
     response = client_service.renew_client(request_data=request_data)
@@ -31,6 +43,11 @@ def renew_client():
 
 @blueprint.route('/<client_name>/revoke', methods=['DELETE'])
 def revoke_client(client_name):
+    """Revoke the certificate of the client identified by the URL.
+
+    :param client_name: Client common name used to locate its PKI files.
+    :return: The serialized service response and its mapped HTTP status.
+    """
     log.info("[INCOMING REQUEST] - Revoke client")
     request_data = RevokeClientRequest(client_name=client_name)
     response = client_service.revoke_client(request_data=request_data)
@@ -40,6 +57,11 @@ def revoke_client(client_name):
 
 @blueprint.route('/<client_name>', methods=['GET'])
 def download_client(client_name):
+    """Return a JSON payload containing a base64-encoded OpenVPN profile.
+
+    :param client_name: Client common name used to locate its PKI files.
+    :return: The serialized profile or error response and its mapped HTTP status.
+    """
     log.info("[INCOMING REQUEST] - Download client")
     response = client_service.generate_client_openvpn_file(client_name=client_name)
     return (jsonify(response.model_dump()),
@@ -48,6 +70,11 @@ def download_client(client_name):
 
 @blueprint.route('/<client_name>', methods=['DELETE'])
 def delete_client(client_name):
+    """Revoke and remove the client identified by the URL.
+
+    :param client_name: Client common name used to locate its PKI files.
+    :return: The serialized service response and its mapped HTTP status.
+    """
     log.info("[INCOMING REQUEST] - Delete client")
     request_data = DeleteClientRequest(client_name=client_name)
     response = client_service.delete_client(request_data=request_data)
@@ -57,6 +84,11 @@ def delete_client(client_name):
 
 @blueprint.route('/connected', methods=['GET'])
 def obtain_connected_clients():
+    """List the routing entries in the OpenVPN status log.
+
+    :return: The serialized connected-client or missing-file response and its
+        mapped HTTP status.
+    """
     log.info("[INCOMING REQUEST] - Obtain connected clients")
     response = openvpn_service.obtain_connected_clients()
     return (jsonify(response.model_dump()),

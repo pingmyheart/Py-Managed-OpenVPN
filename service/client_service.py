@@ -1,3 +1,10 @@
+"""Manage client PKI assets and produce embedded OpenVPN profiles.
+
+OpenSSL commands run through the shell helper; their nonzero exit codes are not
+converted into service errors. Success responses therefore do not guarantee
+that all requested PKI changes were completed.
+"""
+
 import base64
 
 from cryptography.hazmat._oid import NameOID
@@ -19,6 +26,15 @@ from util import (shell_util,
 
 
 def create_client(request_data: CreateClientRequest) -> CreateClientResponse:
+    """Generate a client key, CSR, and CA-signed certificate valid for 825 days.
+
+    Uses a 3072-bit RSA key with requested mode 0600 and the configured server
+    organization in the subject. An existing private key prevents creation.
+
+    :param request_data: Client name, country, and organizational unit.
+    :return: ``BaseResponse`` with ``CLIENT_ALREADY_EXISTS`` if the key exists,
+        otherwise ``SUCCESS`` after issuing the commands.
+    """
     if path_util.check_if_file_exists(f"{env.private_keys_path}{request_data.client_name}.key"):
         log.info(f"Client '{request_data.client_name}' already exists. Skipping creation.")
         return BaseResponse.from_code(code_enum=ResponseCodeEnums.CLIENT_ALREADY_EXISTS)
@@ -48,6 +64,17 @@ def create_client(request_data: CreateClientRequest) -> CreateClientResponse:
 
 
 def revoke_client(request_data: RevokeClientRequest) -> BaseResponse:
+    """Revoke an unexpired client certificate and regenerate the CA CRL.
+
+    Signals a VPN restart after issuing the revocation commands. An expired
+    certificate is treated as already unusable and does not trigger a restart.
+
+    :param request_data: Name of the client whose certificate should be revoked.
+    :return: ``INTERNAL_ERROR`` if the key or certificate is absent; otherwise a
+        ``SUCCESS`` base response.
+    :raises OSError: If the certificate exists but cannot be read.
+    :raises ValueError: If the certificate cannot be parsed.
+    """
     # Check conditions
     if not path_util.check_if_file_exists(f"{env.private_keys_path}{request_data.client_name}.key"):
         log.info(f"Client '{request_data.client_name}' private key does not exist. Cannot revoke.")
@@ -77,6 +104,19 @@ def revoke_client(request_data: RevokeClientRequest) -> BaseResponse:
 
 
 def renew_client(request_data: RenewClientRequest) -> BaseResponse:
+    """Reissue a client certificate for 825 days using its existing private key.
+
+    Preserves country, organization, and organizational unit from the old
+    certificate. If it is still valid, revokes it, regenerates the CRL, and
+    signals a restart before requesting the replacement certificate.
+
+    :param request_data: Name of the client whose certificate should be renewed.
+    :return: ``INTERNAL_ERROR`` if the key or certificate is absent; otherwise a
+        ``SUCCESS`` base response after issuing the renewal commands.
+    :raises OSError: If the existing certificate cannot be read.
+    :raises ValueError: If the existing certificate cannot be parsed.
+    :raises IndexError: If a required subject attribute is missing.
+    """
     # Check conditions
     if not path_util.check_if_file_exists(f"{env.private_keys_path}{request_data.client_name}.key"):
         log.info(f"Client '{request_data.client_name}' private key does not exist. Cannot renew.")
@@ -126,6 +166,16 @@ def renew_client(request_data: RenewClientRequest) -> BaseResponse:
 
 
 def delete_client(request_data: DeleteClientRequest) -> BaseResponse:
+    """Request revocation, then delete the client's private key and certificate.
+
+    Leaves the CSR, CA database, and archived certificates intact. The result
+    from ``revoke_client`` is not checked before deleting existing files.
+
+    :param request_data: Name of the client to remove.
+    :return: A ``SUCCESS`` base response, including when both files are absent.
+    :raises OSError: If certificate reading or file deletion fails.
+    :raises ValueError: If a certificate read for revocation cannot be parsed.
+    """
     if (not path_util.check_if_file_exists(f"{env.private_keys_path}{request_data.client_name}.key")
             and not path_util.check_if_file_exists(f"{env.certificates_path}{request_data.client_name}.crt")):
         log.info(f"Client '{request_data.client_name}' does not exist. Skipping deletion.")
@@ -137,6 +187,18 @@ def delete_client(request_data: DeleteClientRequest) -> BaseResponse:
 
 
 def generate_client_openvpn_file(client_name: str):
+    """Build a base64-encoded profile with embedded client credentials.
+
+    Embeds the CA and client certificates, client private key, and shared
+    ``tls-crypt`` key. Uses the configured server hostname and UDP port 1194.
+
+    :param client_name: Common name and basename of the client's PKI files.
+    :return: ``GenerateClientOpenvpnFileResponse`` with the encoded profile, or
+        ``BaseResponse`` with ``INTERNAL_ERROR`` if the client key or certificate
+        is absent.
+    :raises OSError: If a required credential file cannot be read.
+    :raises UnicodeDecodeError: If a credential file cannot be decoded as text.
+    """
     # Check conditions
     if not path_util.check_if_file_exists(f"{env.private_keys_path}{client_name}.key"):
         log.info(f"Client '{client_name}' private key does not exist. Cannot generate OpenVPN file.")

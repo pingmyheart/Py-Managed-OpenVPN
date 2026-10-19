@@ -1,9 +1,21 @@
+"""Write firewall rule scripts for the configured VPN routing mode."""
+
 from configuration import environment_configuration as env
 from enumeration.openvpn_mode_enums import OpenVPNModeEnums
 from util import network_util, path_util
 
 
 def generate_create_rules_file():
+    """Write ``iptables.rules.create.bash`` without applying its rules.
+
+    Full tunnel permits forwarding and masquerades VPN traffic through the
+    outgoing interface. Resource-only mode limits forwarding and masquerading
+    to configured destinations, allows established replies, and drops other
+    traffic from the VPN subnet. File creation failures are not checked.
+
+    :raises RuntimeError: If the outgoing interface cannot be uniquely identified.
+    :raises OSError: If the route lookup fails.
+    """
     interface = network_util.get_outgoing_interface()
     if env.openvpn_server_network_mode == OpenVPNModeEnums.FULL_TUNNEL:
         config = f"""iptables -A FORWARD \
@@ -37,6 +49,15 @@ iptables -A POSTROUTING -t nat -o {interface} \
 
 
 def generate_delete_rules_file():
+    """Write ``iptables.rules.delete.bash`` without executing it.
+
+    Generates deletion commands matching the creation rules for the current
+    environment and outgoing interface, not a previously saved configuration.
+    File creation failures are not checked.
+
+    :raises RuntimeError: If the outgoing interface cannot be uniquely identified.
+    :raises OSError: If the route lookup fails.
+    """
     interface = network_util.get_outgoing_interface()
     if env.openvpn_server_network_mode == OpenVPNModeEnums.FULL_TUNNEL:
         config = f"""iptables -D FORWARD \

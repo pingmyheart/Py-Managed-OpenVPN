@@ -1,3 +1,5 @@
+"""Configure the root logger to write trace-correlated messages to stdout."""
+
 import logging
 import sys
 
@@ -5,7 +7,15 @@ from opentelemetry import trace
 
 
 class TraceContextFilter(logging.Filter):
+    """Enrich log records with the currently active OpenTelemetry context."""
+
     def filter(self, record):
+        """Add trace and span identifiers without discarding the record.
+
+        :param record: Log record to modify in place.
+        :return: Always ``True``. Missing contexts use ``no-trace`` and
+            ``no-span`` as their respective identifiers.
+        """
         span = trace.get_current_span()
         span_ctx = span.get_span_context()
 

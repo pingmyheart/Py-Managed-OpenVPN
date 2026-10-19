@@ -1,3 +1,10 @@
+"""Load dotenv settings and derive paths, VPN routes, and client DNS servers.
+
+Values are resolved on import. Incomplete indexed route pairs are omitted and
+logged; complete pairs are not validated as IP networks. Unknown network modes
+fall back to full tunnel, which also supplies public DNS defaults when needed.
+"""
+
 import os
 import re
 

@@ -1,8 +1,17 @@
+"""Read PEM certificate metadata and provide timestamp helpers."""
+
+
 def get_certificate_expiration_in_epoch_millis(certificate_path: str) -> int:
-    """
-        Obtain the certificate expiration date in epoch milliseconds using cryptography library.
-    :param certificate_path: The path to the certificate file.
-    :return: The expiration date in epoch milliseconds.
+    """Read a PEM certificate's expiration time in milliseconds.
+
+    The UTC date components are converted with ``time.mktime``, which interprets
+    them in the process's local timezone. The result matches the UTC epoch
+    timestamp only when that timezone is UTC.
+
+    :param certificate_path: Path to the PEM-encoded certificate.
+    :return: Expiration time converted to milliseconds using the local timezone.
+    :raises OSError: If the certificate cannot be read.
+    :raises ValueError: If the certificate data cannot be parsed.
     """
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
@@ -17,10 +26,16 @@ def get_certificate_expiration_in_epoch_millis(certificate_path: str) -> int:
 
 
 def get_crl_expiration_in_epoch_millis(crl_path: str) -> int:
-    """
-        Obtain the CRL expiration date in epoch milliseconds using cryptography library.
-    :param crl_path: The path to the CRL file.
-    :return: The expiration date in epoch milliseconds.
+    """Read a PEM revocation list's next-update time in milliseconds.
+
+    As with certificate expiration, ``time.mktime`` interprets the UTC date
+    components in the process's local timezone.
+
+    :param crl_path: Path to the PEM-encoded certificate revocation list.
+    :return: Next-update time converted to milliseconds using the local timezone.
+    :raises OSError: If the CRL cannot be read.
+    :raises ValueError: If the CRL data cannot be parsed.
+    :raises AttributeError: If the CRL has no next-update date.
     """
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
@@ -37,7 +52,9 @@ def get_crl_expiration_in_epoch_millis(crl_path: str) -> int:
 def actual_timestamp_in_millis() -> int:
     """
     Get the current timestamp in epoch milliseconds.
-    :return: The current timestamp in epoch milliseconds.
+
+    :return: Integer milliseconds since the Unix epoch, truncated from the
+        system wall-clock time.
     """
     import time
 
@@ -45,10 +62,12 @@ def actual_timestamp_in_millis() -> int:
 
 
 def extract_subjects_from_certificate(certificate_path: str):
-    """
-        Extract the subject components from a certificate using the cryptography library.
-    :param certificate_path: Path to certificate
-    :return: subjects
+    """Extract the subject from a PEM-encoded X.509 certificate.
+
+    :param certificate_path: Path to the PEM certificate to read.
+    :return: A ``cryptography.x509.Name`` containing the subject attributes.
+    :raises OSError: If the certificate cannot be read.
+    :raises ValueError: If the certificate data cannot be parsed.
     """
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
