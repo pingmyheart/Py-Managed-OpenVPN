@@ -12,6 +12,7 @@ from flask.cli import load_dotenv
 
 from configuration.logging_configuration import logger as __log
 from enumeration.openvpn_mode_enums import OpenVPNModeEnums
+from util import network_util
 
 load_dotenv()
 
@@ -50,7 +51,7 @@ server_common_name = os.getenv("SERVER_COMMON_NAME",
                                "server")
 
 # OpenVPN Server
-openvpn_server_hostname = os.getenv("OPENVPN_SERVER_HOSTNAME")
+openvpn_server_hostname = os.getenv("OPENVPN_SERVER_HOSTNAME", network_util.obtain_public_ip())
 openvpn_server_network_address = os.getenv("OPENVPN_SERVER_NETWORK_ADDRESS",
                                            "172.27.224.0")
 openvpn_server_network_mask = os.getenv("OPENVPN_SERVER_NETWORK_MASK",

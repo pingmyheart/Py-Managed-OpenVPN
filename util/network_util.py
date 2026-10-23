@@ -47,3 +47,16 @@ def bit_number_to_string_network_mask(bit_number: int) -> str:
     """
     mask = (0xffffffff >> (32 - bit_number)) << (32 - bit_number)
     return f"{(mask >> 24) & 0xff}.{(mask >> 16) & 0xff}.{(mask >> 8) & 0xff}.{mask & 0xff}"
+
+
+def obtain_public_ip() -> str:
+    """using ipinfo.io, obtain the public ip of current machine
+    :return: public ip address of current machine
+    """
+    import requests
+    try:
+        response = requests.get("https://ipinfo.io/ip")
+        response.raise_for_status()
+        return response.text.strip()
+    except requests.RequestException as e:
+        raise RuntimeError(f"Failed to obtain public IP: {e}")
