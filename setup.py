@@ -9,6 +9,6 @@ warnings.filterwarnings("ignore")
 
 setup(
     name='py-managed-openvpn',
-    version='0.0.1.dev0',
+    version='0.0.1',
     packages=find_packages()
 )
